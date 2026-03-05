@@ -72,6 +72,30 @@ def _match_score(text: str, terms: list[str], base: float) -> float:
     return base + (min(matches, 5) * 0.08)
 
 
+def _clean_source_snippet(text: str, max_len: int = 260) -> str:
+    compact = re.sub(r"\s+", " ", (text or "")).strip()
+    if len(compact) <= max_len:
+        return compact
+    return compact[: max_len - 1].rstrip() + "…"
+
+
+def _prepare_source_references(sources: list[dict]) -> list[dict]:
+    prepared: list[dict] = []
+    for source in sources:
+        prepared.append(
+            {
+                "source_type": source.get("source_type"),
+                "wiki_page_id": source.get("wiki_page_id"),
+                "document_id": source.get("document_id"),
+                "chunk_id": source.get("chunk_id"),
+                "score": float(source.get("score", 0.0)),
+                "title": str(source.get("title", "")),
+                "snippet": _clean_source_snippet(str(source.get("snippet", ""))),
+            }
+        )
+    return prepared
+
+
 async def _get_context(
     db: AsyncSession, tenant_id: uuid.UUID, query: str
 ) -> tuple[str, list[dict]]:
@@ -231,6 +255,7 @@ async def _get_context(
             seen_ids.add(source_key)
             ranked.append(
                 {
+                    "source_type": "document_chunk",
                     "chunk_id": chunk_id,
                     "title": filename,
                     "snippet": chunk.content[:500],
@@ -251,6 +276,7 @@ async def _get_context(
             metadata = vr.get("metadata") or {}
             ranked.append(
                 {
+                    "source_type": "wiki_page",
                     "wiki_page_id": page_id,
                     "title": str(metadata.get("title") or page.title),
                     "snippet": str(metadata.get("content") or page.markdown_content[:500]),
@@ -264,6 +290,7 @@ async def _get_context(
             continue
         seen_ids.add(page_key)
         ranked.append({
+            "source_type": "wiki_page",
             "wiki_page_id": str(page.id),
             "title": page.title,
             "snippet": page.markdown_content[:500],
@@ -280,6 +307,7 @@ async def _get_context(
             continue
         seen_ids.add(chunk_key)
         ranked.append({
+            "source_type": "document_chunk",
             "chunk_id": str(chunk.id),
             "title": filename,
             "snippet": chunk.content[:500],
@@ -293,6 +321,7 @@ async def _get_context(
         seen_ids.add(doc_key)
         snippet = (document.markdown_content or "")[:700]
         ranked.append({
+            "source_type": "document",
             "document_id": str(document.id),
             "title": document.filename,
             "snippet": snippet,
@@ -320,6 +349,7 @@ async def _get_context(
         )
         for chunk, filename in recent_results.all():
             ranked.append({
+                "source_type": "document_chunk",
                 "chunk_id": str(chunk.id),
                 "title": filename,
                 "snippet": chunk.content[:500],
@@ -340,7 +370,7 @@ async def _get_context(
         context_parts.append(f"### {page.title}\n{page.markdown_content[:2000]}")
 
     context = "\n\n---\n\n".join(context_parts) if context_parts else "No relevant context found."
-    return context, top_sources
+    return context, _prepare_source_references(top_sources)
 
 
 async def send_message(

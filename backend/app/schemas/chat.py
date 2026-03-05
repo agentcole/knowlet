@@ -17,7 +17,9 @@ class ChatSessionResponse(BaseModel):
 
 
 class SourceReference(BaseModel):
+    source_type: str | None = None
     wiki_page_id: uuid.UUID | None = None
+    document_id: uuid.UUID | None = None
     chunk_id: uuid.UUID | None = None
     score: float = 0.0
     title: str = ""

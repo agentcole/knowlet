@@ -140,5 +140,6 @@ Rules:
 - If the context doesn't contain enough information, say so
 - Be concise and helpful
 - Reference source pages when relevant
+- Include a short "Sources" section at the end with 1-3 source titles you used
 - Format responses in markdown
 """

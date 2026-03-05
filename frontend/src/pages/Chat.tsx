@@ -4,8 +4,29 @@ import { useChatSessions, useChatMessages, useCreateChatSession, useSendMessage 
 import { chatApi } from "@/api/chat";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
-import { Card } from "@/components/ui/card";
-import { MessageSquare, Plus, Send, Trash2, BookOpen } from "lucide-react";
+import {
+  MessageSquare,
+  Plus,
+  Send,
+  Trash2,
+  BookOpen,
+  ExternalLink,
+  ChevronRight,
+  ChevronDown,
+} from "lucide-react";
+import { Link } from "react-router-dom";
+import type { ChatMessage } from "@/types";
+
+function sourceTypeLabel(source: NonNullable<ChatMessage["sources"]>[number]): string {
+  if (source.source_type === "wiki_page" || source.wiki_page_id) return "Wiki";
+  if (source.source_type === "document") return "Document";
+  return "Document Chunk";
+}
+
+function sourceHref(source: NonNullable<ChatMessage["sources"]>[number]): string {
+  if (source.wiki_page_id) return `/wiki?pageId=${source.wiki_page_id}`;
+  return "/documents";
+}
 
 export function ChatPage() {
   const {
@@ -24,6 +45,7 @@ export function ChatPage() {
   } = useSendMessage(selectedSessionId || "");
   const [input, setInput] = useState("");
   const [pendingUserMessage, setPendingUserMessage] = useState<string | null>(null);
+  const [expandedSourcesByMessage, setExpandedSourcesByMessage] = useState<Record<string, boolean>>({});
   const messagesEndRef = useRef<HTMLDivElement>(null);
 
   useEffect(() => {
@@ -40,6 +62,10 @@ export function ChatPage() {
       setSelectedSessionId(sessions[0].id);
     }
   }, [sessions, selectedSessionId]);
+
+  useEffect(() => {
+    setExpandedSourcesByMessage({});
+  }, [selectedSessionId]);
 
   const handleSend = async () => {
     if (!input.trim() || !selectedSessionId || isStreaming) return;
@@ -126,13 +152,61 @@ export function ChatPage() {
                       <ReactMarkdown>{msg.content}</ReactMarkdown>
                     </div>
                     {msg.sources && msg.sources.length > 0 && (
-                      <div className="mt-2 pt-2 border-t border-border/50">
-                        <p className="text-xs font-medium mb-1 flex items-center gap-1">
-                          <BookOpen size={12} /> Sources
-                        </p>
-                        {msg.sources.map((src, i) => (
-                          <p key={i} className="text-xs opacity-75">{src.title || `Source ${i + 1}`}</p>
-                        ))}
+                      <div className="mt-3 border-t border-border/50 pt-2">
+                        <button
+                          className="mb-2 inline-flex items-center gap-1 text-xs font-medium hover:underline"
+                          onClick={() =>
+                            setExpandedSourcesByMessage((prev) => ({
+                              ...prev,
+                              [msg.id]: !prev[msg.id],
+                            }))
+                          }
+                          type="button"
+                        >
+                          {expandedSourcesByMessage[msg.id] ? (
+                            <ChevronDown size={12} />
+                          ) : (
+                            <ChevronRight size={12} />
+                          )}
+                          <BookOpen size={12} />
+                          Sources ({msg.sources.length})
+                        </button>
+                        {expandedSourcesByMessage[msg.id] && (
+                          <div className="space-y-2">
+                            {msg.sources.map((src, i) => (
+                              <div
+                                key={src.wiki_page_id || src.document_id || src.chunk_id || `${msg.id}-${i}`}
+                                className="rounded-md border border-border/60 bg-background/40 px-2 py-2 text-xs"
+                              >
+                                <div className="mb-1 flex items-center justify-between gap-2">
+                                  <p className="truncate font-medium">
+                                    {src.title || `Source ${i + 1}`}
+                                  </p>
+                                  <span className="shrink-0 rounded bg-muted px-1.5 py-0.5 text-[10px] uppercase tracking-wide text-muted-foreground">
+                                    {sourceTypeLabel(src)}
+                                  </span>
+                                </div>
+                                {src.snippet && (
+                                  <p className="line-clamp-3 text-[11px] text-muted-foreground">
+                                    {src.snippet}
+                                  </p>
+                                )}
+                                <div className="mt-2 flex items-center justify-between">
+                                  <span className="text-[10px] text-muted-foreground">
+                                    Relevance: {(src.score * 100).toFixed(0)}%
+                                  </span>
+                                  <Link
+                                    to={sourceHref(src)}
+                                    className="inline-flex items-center gap-1 text-[11px] font-medium text-primary hover:underline"
+                                  >
+                                    Open
+                                    <ExternalLink size={11} />
+                                  </Link>
+                                </div>
+                              </div>
+                            ))}
+                          </div>
+                        )}
                       </div>
                     )}
                   </div>

@@ -144,7 +144,9 @@ export interface ChatMessage {
   role: "user" | "assistant";
   content: string;
   sources: Array<{
+    source_type?: "wiki_page" | "document_chunk" | "document";
     wiki_page_id?: string;
+    document_id?: string;
     chunk_id?: string;
     score: number;
     title: string;

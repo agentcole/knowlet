@@ -1,5 +1,6 @@
 import { useEffect, useMemo, useState, type DragEvent } from "react";
 import ReactMarkdown from "react-markdown";
+import { useSearchParams } from "react-router-dom";
 import {
   useWikiTree,
   useWikiPage,
@@ -353,6 +354,7 @@ function CategoryTree({
 }
 
 export function WikiPage_() {
+  const [searchParams] = useSearchParams();
   const queryClient = useQueryClient();
   const { data: tree, isLoading } = useWikiTree();
   const { memberships, currentTenantId } = useAuthStore();
@@ -372,6 +374,7 @@ export function WikiPage_() {
   const [dragPayload, setDragPayload] = useState<DragPayload | null>(null);
   const [activeDropTarget, setActiveDropTarget] = useState<string | null>(null);
   const [dragError, setDragError] = useState("");
+  const [appliedPageParam, setAppliedPageParam] = useState<string | null>(null);
   const [collapsedCategoryIds, setCollapsedCategoryIds] = useState<
     Record<string, boolean>
   >({});
@@ -408,6 +411,19 @@ export function WikiPage_() {
         : null,
     [editingCategoryId, tree],
   );
+  const requestedPageId = searchParams.get("pageId");
+
+  useEffect(() => {
+    if (!tree || !requestedPageId || appliedPageParam === requestedPageId) return;
+    const pageCategoryId = findCategoryIdForPage(tree.categories, requestedPageId);
+    const pageInUncategorized = tree.uncategorized_pages.some(
+      (page) => page.id === requestedPageId,
+    );
+    if (!pageCategoryId && !pageInUncategorized) return;
+    setSelectedPageId(requestedPageId);
+    setSelectedCategoryId(pageCategoryId ?? null);
+    setAppliedPageParam(requestedPageId);
+  }, [tree, requestedPageId, appliedPageParam]);
 
   useEffect(() => {
     if (!tree || !selectedPageId) return;
