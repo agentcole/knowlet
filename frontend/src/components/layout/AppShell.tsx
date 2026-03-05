@@ -9,6 +9,7 @@ import {
   BookOpen,
   Mic,
   MessageSquare,
+  Users,
   LayoutDashboard,
   LogOut,
   ChevronDown,
@@ -20,6 +21,7 @@ const navItems = [
   { path: "/wiki", label: "Wiki", icon: BookOpen },
   { path: "/meetings", label: "Meetings", icon: Mic },
   { path: "/chat", label: "Chat", icon: MessageSquare },
+  { path: "/team", label: "Team", icon: Users },
 ];
 
 export function AppShell() {

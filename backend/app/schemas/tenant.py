@@ -1,6 +1,8 @@
 import uuid
 from pydantic import BaseModel, EmailStr
 
+from app.models.tenant_membership import TenantRole
+
 
 class TenantCreate(BaseModel):
     name: str
@@ -22,11 +24,15 @@ class TenantResponse(BaseModel):
 
 class InviteMemberRequest(BaseModel):
     email: EmailStr
-    role: str = "member"
+    role: TenantRole = TenantRole.MEMBER
+
+
+class UpdateMemberRoleRequest(BaseModel):
+    role: TenantRole
 
 
 class MemberResponse(BaseModel):
     user_id: uuid.UUID
     email: str
     full_name: str
-    role: str
+    role: TenantRole

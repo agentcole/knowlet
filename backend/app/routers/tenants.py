@@ -12,6 +12,7 @@ from app.schemas.tenant import (
     MemberResponse,
     TenantResponse,
     TenantUpdate,
+    UpdateMemberRoleRequest,
 )
 from app.services import tenant_service
 
@@ -60,3 +61,36 @@ async def invite_member(
         db, tenant_id, body.email, body.role, membership
     )
     return MemberResponse(**member)
+
+
+@router.patch("/current/members/{user_id}", response_model=MemberResponse)
+async def update_member_role(
+    user_id: uuid.UUID,
+    body: UpdateMemberRoleRequest,
+    tenant_id: uuid.UUID = Depends(get_tenant_id),
+    membership: TenantMembership = Depends(get_tenant_membership),
+    db: AsyncSession = Depends(get_db),
+):
+    member = await tenant_service.update_member_role(
+        db=db,
+        tenant_id=tenant_id,
+        target_user_id=user_id,
+        new_role=body.role,
+        actor_membership=membership,
+    )
+    return MemberResponse(**member)
+
+
+@router.delete("/current/members/{user_id}", status_code=204)
+async def remove_member(
+    user_id: uuid.UUID,
+    tenant_id: uuid.UUID = Depends(get_tenant_id),
+    membership: TenantMembership = Depends(get_tenant_membership),
+    db: AsyncSession = Depends(get_db),
+):
+    await tenant_service.remove_member(
+        db=db,
+        tenant_id=tenant_id,
+        target_user_id=user_id,
+        actor_membership=membership,
+    )

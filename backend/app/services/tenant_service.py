@@ -1,6 +1,6 @@
 import uuid
 
-from sqlalchemy import select
+from sqlalchemy import func, select
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy.orm import selectinload
 
@@ -59,7 +59,7 @@ async def invite_member(
     db: AsyncSession,
     tenant_id: uuid.UUID,
     email: str,
-    role: str,
+    role: TenantRole,
     inviter_membership: TenantMembership,
 ) -> dict:
     if inviter_membership.role not in (TenantRole.OWNER, TenantRole.ADMIN):
@@ -82,7 +82,7 @@ async def invite_member(
     membership = TenantMembership(
         user_id=user.id,
         tenant_id=tenant_id,
-        role=TenantRole(role),
+        role=role,
     )
     db.add(membership)
     await db.flush()
@@ -93,3 +93,109 @@ async def invite_member(
         "full_name": user.full_name,
         "role": role,
     }
+
+
+async def update_member_role(
+    db: AsyncSession,
+    tenant_id: uuid.UUID,
+    target_user_id: uuid.UUID,
+    new_role: TenantRole,
+    actor_membership: TenantMembership,
+) -> dict:
+    if actor_membership.role not in (TenantRole.OWNER, TenantRole.ADMIN):
+        raise ForbiddenError("Only owners and admins can change member roles")
+
+    if actor_membership.user_id == target_user_id:
+        raise BadRequestError("You cannot change your own role")
+
+    result = await db.execute(
+        select(TenantMembership)
+        .options(selectinload(TenantMembership.user))
+        .where(
+            TenantMembership.tenant_id == tenant_id,
+            TenantMembership.user_id == target_user_id,
+        )
+    )
+    target_membership = result.scalar_one_or_none()
+    if not target_membership:
+        raise NotFoundError("Member not found")
+
+    # Admins cannot modify owners, and only owners can assign owner role.
+    if actor_membership.role != TenantRole.OWNER:
+        if target_membership.role == TenantRole.OWNER:
+            raise ForbiddenError("Only owners can modify owner memberships")
+        if new_role == TenantRole.OWNER:
+            raise ForbiddenError("Only owners can assign the owner role")
+
+    if target_membership.role == new_role:
+        user = target_membership.user
+        return {
+            "user_id": user.id,
+            "email": user.email,
+            "full_name": user.full_name,
+            "role": target_membership.role,
+        }
+
+    if target_membership.role == TenantRole.OWNER and new_role != TenantRole.OWNER:
+        owners_count = await db.scalar(
+            select(func.count())
+            .select_from(TenantMembership)
+            .where(
+                TenantMembership.tenant_id == tenant_id,
+                TenantMembership.role == TenantRole.OWNER,
+            )
+        )
+        if owners_count is None or owners_count <= 1:
+            raise BadRequestError("A tenant must have at least one owner")
+
+    target_membership.role = new_role
+    await db.flush()
+
+    user = target_membership.user
+    return {
+        "user_id": user.id,
+        "email": user.email,
+        "full_name": user.full_name,
+        "role": target_membership.role,
+    }
+
+
+async def remove_member(
+    db: AsyncSession,
+    tenant_id: uuid.UUID,
+    target_user_id: uuid.UUID,
+    actor_membership: TenantMembership,
+) -> None:
+    if actor_membership.role not in (TenantRole.OWNER, TenantRole.ADMIN):
+        raise ForbiddenError("Only owners and admins can remove members")
+
+    if actor_membership.user_id == target_user_id:
+        raise BadRequestError("You cannot remove yourself from the tenant")
+
+    result = await db.execute(
+        select(TenantMembership).where(
+            TenantMembership.tenant_id == tenant_id,
+            TenantMembership.user_id == target_user_id,
+        )
+    )
+    target_membership = result.scalar_one_or_none()
+    if not target_membership:
+        raise NotFoundError("Member not found")
+
+    if actor_membership.role != TenantRole.OWNER and target_membership.role == TenantRole.OWNER:
+        raise ForbiddenError("Only owners can remove owners")
+
+    if target_membership.role == TenantRole.OWNER:
+        owners_count = await db.scalar(
+            select(func.count())
+            .select_from(TenantMembership)
+            .where(
+                TenantMembership.tenant_id == tenant_id,
+                TenantMembership.role == TenantRole.OWNER,
+            )
+        )
+        if owners_count is None or owners_count <= 1:
+            raise BadRequestError("A tenant must have at least one owner")
+
+    await db.delete(target_membership)
+    await db.flush()

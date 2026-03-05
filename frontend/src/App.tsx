@@ -10,6 +10,7 @@ import { DocumentsPage } from "@/pages/Documents";
 import { WikiPage_ } from "@/pages/Wiki";
 import { MeetingsPage } from "@/pages/Meetings";
 import { ChatPage } from "@/pages/Chat";
+import { TeamPage } from "@/pages/Team";
 
 const queryClient = new QueryClient({
   defaultOptions: {
@@ -50,6 +51,7 @@ function AppRoutes() {
         <Route path="/wiki" element={<WikiPage_ />} />
         <Route path="/meetings" element={<MeetingsPage />} />
         <Route path="/chat" element={<ChatPage />} />
+        <Route path="/team" element={<TeamPage />} />
       </Route>
       <Route path="*" element={<Navigate to="/dashboard" replace />} />
     </Routes>

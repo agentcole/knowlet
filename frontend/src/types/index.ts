@@ -1,3 +1,5 @@
+export type TenantRole = "owner" | "admin" | "member" | "viewer";
+
 export interface User {
   id: string;
   email: string;
@@ -10,7 +12,14 @@ export interface Membership {
   tenant_id: string;
   tenant_name: string;
   tenant_slug: string;
-  role: string;
+  role: TenantRole;
+}
+
+export interface TenantMember {
+  user_id: string;
+  email: string;
+  full_name: string;
+  role: TenantRole;
 }
 
 export interface Tenant {
