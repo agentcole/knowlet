@@ -37,6 +37,18 @@ Update `.env` with real API keys:
 - `VOYAGE_API_KEY`
 - `DEEPGRAM_API_KEY`
 
+Optional email notifications (SMTP):
+
+- `EMAIL_NOTIFICATIONS_ENABLED=true`
+- `SMTP_HOST`
+- `SMTP_PORT`
+- `SMTP_USERNAME`
+- `SMTP_PASSWORD`
+- `SMTP_FROM_EMAIL`
+- `SMTP_FROM_NAME` (default `Knowlet`)
+- `SMTP_USE_TLS` / `SMTP_USE_SSL`
+- `APP_BASE_URL` (used in email links/messages)
+
 ### 2) Start the stack
 
 ```bash
@@ -89,6 +101,16 @@ Use this when:
 - You migrated data and need a clean vector rebuild
 
 The action is queued asynchronously and processed by the Celery worker.
+
+## Email Notifications
+
+Knowlet supports SMTP email notifications for tenant membership events:
+
+- User invited to tenant
+- User role changed
+- User removed from tenant
+
+If SMTP is not configured or disabled, app behavior continues without failing the request.
 
 ## Local Troubleshooting
 

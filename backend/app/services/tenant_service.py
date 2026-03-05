@@ -1,3 +1,4 @@
+import logging
 import uuid
 
 from sqlalchemy import func, select
@@ -8,6 +9,13 @@ from app.core.exceptions import BadRequestError, ForbiddenError, NotFoundError
 from app.models.tenant import Tenant
 from app.models.tenant_membership import TenantMembership, TenantRole
 from app.models.user import User
+from app.services.email_service import (
+    send_member_invited_email,
+    send_member_removed_email,
+    send_member_role_changed_email,
+)
+
+logger = logging.getLogger(__name__)
 
 
 async def get_tenant(db: AsyncSession, tenant_id: uuid.UUID) -> Tenant:
@@ -87,6 +95,17 @@ async def invite_member(
     db.add(membership)
     await db.flush()
 
+    try:
+        tenant = await get_tenant(db, tenant_id)
+        await send_member_invited_email(
+            to_email=user.email,
+            full_name=user.full_name,
+            tenant_name=tenant.name,
+            role=role.value,
+        )
+    except Exception:
+        logger.exception("Failed to send invited member notification")
+
     return {
         "user_id": user.id,
         "email": user.email,
@@ -136,6 +155,7 @@ async def update_member_role(
             "role": target_membership.role,
         }
 
+    previous_role = target_membership.role
     if target_membership.role == TenantRole.OWNER and new_role != TenantRole.OWNER:
         owners_count = await db.scalar(
             select(func.count())
@@ -152,6 +172,18 @@ async def update_member_role(
     await db.flush()
 
     user = target_membership.user
+    try:
+        tenant = await get_tenant(db, tenant_id)
+        await send_member_role_changed_email(
+            to_email=user.email,
+            full_name=user.full_name,
+            tenant_name=tenant.name,
+            previous_role=previous_role.value,
+            new_role=new_role.value,
+        )
+    except Exception:
+        logger.exception("Failed to send role change notification")
+
     return {
         "user_id": user.id,
         "email": user.email,
@@ -197,5 +229,17 @@ async def remove_member(
         if owners_count is None or owners_count <= 1:
             raise BadRequestError("A tenant must have at least one owner")
 
+    user = await db.get(User, target_user_id)
+    tenant = await get_tenant(db, tenant_id)
     await db.delete(target_membership)
     await db.flush()
+
+    if user:
+        try:
+            await send_member_removed_email(
+                to_email=user.email,
+                full_name=user.full_name,
+                tenant_name=tenant.name,
+            )
+        except Exception:
+            logger.exception("Failed to send member removal notification")
