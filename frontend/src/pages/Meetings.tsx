@@ -1,6 +1,7 @@
-import { useState, useCallback } from "react";
+import { useState, useCallback, useEffect } from "react";
 import { useQuery } from "@tanstack/react-query";
 import { useDropzone } from "react-dropzone";
+import { useSearchParams } from "react-router-dom";
 import { meetingsApi } from "@/api/meetings";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
@@ -10,8 +11,10 @@ import { Mic, Upload, Clock, Users } from "lucide-react";
 import type { Meeting, Transcript } from "@/types";
 
 export function MeetingsPage() {
+  const [searchParams] = useSearchParams();
   const [page, setPage] = useState(1);
   const [selectedId, setSelectedId] = useState<string | null>(null);
+  const [appliedMeetingParam, setAppliedMeetingParam] = useState<string | null>(null);
   const [uploadTitle, setUploadTitle] = useState("");
 
   const { data, isLoading, refetch } = useQuery({
@@ -25,6 +28,13 @@ export function MeetingsPage() {
     queryFn: () => meetingsApi.getTranscript(selectedId!).then((r) => r.data),
     enabled: !!selectedId,
   });
+
+  useEffect(() => {
+    const meetingId = searchParams.get("meetingId");
+    if (!meetingId || meetingId === appliedMeetingParam) return;
+    setSelectedId(meetingId);
+    setAppliedMeetingParam(meetingId);
+  }, [searchParams, appliedMeetingParam]);
 
   const onDrop = useCallback(
     async (files: File[]) => {

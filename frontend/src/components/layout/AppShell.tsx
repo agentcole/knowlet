@@ -9,6 +9,7 @@ import {
   BookOpen,
   Mic,
   MessageSquare,
+  Search,
   Users,
   LayoutDashboard,
   LogOut,
@@ -17,6 +18,7 @@ import {
 
 const navItems = [
   { path: "/dashboard", label: "Dashboard", icon: LayoutDashboard },
+  { path: "/search", label: "Search", icon: Search },
   { path: "/documents", label: "Documents", icon: FileText },
   { path: "/wiki", label: "Wiki", icon: BookOpen },
   { path: "/meetings", label: "Meetings", icon: Mic },

@@ -161,3 +161,17 @@ export interface PaginatedResponse<T> {
   page: number;
   page_size: number;
 }
+
+export type SearchSourceType = "wiki_page" | "document" | "document_chunk" | "meeting";
+
+export interface SearchResult {
+  source_type: SearchSourceType;
+  source_id: string;
+  title: string;
+  snippet: string;
+  score: number;
+}
+
+export interface SearchResponse {
+  results: SearchResult[];
+}
