@@ -1,5 +1,13 @@
 # Knowlet
 
+[![License](https://img.shields.io/github/license/agentcole/knowlet)](LICENSE)
+[![Last Commit](https://img.shields.io/github/last-commit/agentcole/knowlet)](https://github.com/agentcole/knowlet/commits/main)
+[![Issues](https://img.shields.io/github/issues/agentcole/knowlet)](https://github.com/agentcole/knowlet/issues)
+[![PRs](https://img.shields.io/github/issues-pr/agentcole/knowlet)](https://github.com/agentcole/knowlet/pulls)
+[![Stars](https://img.shields.io/github/stars/agentcole/knowlet)](https://github.com/agentcole/knowlet/stargazers)
+[![Forks](https://img.shields.io/github/forks/agentcole/knowlet)](https://github.com/agentcole/knowlet/network/members)
+[![Contributors](https://img.shields.io/github/contributors/agentcole/knowlet)](https://github.com/agentcole/knowlet/graphs/contributors)
+
 Knowlet is a multi-tenant knowledge platform for teams to upload documents and meetings, curate wiki pages, and chat with AI over indexed company knowledge.
 
 ## Highlights
@@ -146,3 +154,11 @@ docker compose up -d --force-recreate celery-worker
 
 - This repository is currently set up for local/dev usage first.
 - For production, add hardened secrets management, TLS, and deployment-specific configuration.
+
+## Community
+
+- Code of Conduct: [CODE_OF_CONDUCT.md](CODE_OF_CONDUCT.md)
+- Contributing: [CONTRIBUTING.md](CONTRIBUTING.md)
+- Security: [SECURITY.md](SECURITY.md)
+- Issues: https://github.com/agentcole/knowlet/issues
+- Pull Requests: https://github.com/agentcole/knowlet/pulls
