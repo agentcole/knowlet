@@ -8,6 +8,20 @@ export function useWikiTree() {
   });
 }
 
+export function useWikiAssets(query: string, page = 1, pageSize = 24) {
+  return useQuery({
+    queryKey: ["wiki-assets", query, page, pageSize],
+    queryFn: () =>
+      wikiApi
+        .listAssets({
+          q: query || undefined,
+          page,
+          page_size: pageSize,
+        })
+        .then((r) => r.data),
+  });
+}
+
 export function useWikiPage(id: string) {
   return useQuery({
     queryKey: ["wiki-page", id],
@@ -97,6 +111,26 @@ export function useDeleteWikiPage() {
       queryClient.invalidateQueries({ queryKey: ["wiki-tree"] });
       queryClient.invalidateQueries({ queryKey: ["wiki-page", id] });
       queryClient.invalidateQueries({ queryKey: ["wiki-revisions", id] });
+    },
+  });
+}
+
+export function useUploadWikiAsset() {
+  const queryClient = useQueryClient();
+  return useMutation({
+    mutationFn: (file: File) => wikiApi.uploadAsset(file).then((r) => r.data),
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ["wiki-assets"] });
+    },
+  });
+}
+
+export function useDeleteWikiAsset() {
+  const queryClient = useQueryClient();
+  return useMutation({
+    mutationFn: (id: string) => wikiApi.deleteAsset(id),
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ["wiki-assets"] });
     },
   });
 }

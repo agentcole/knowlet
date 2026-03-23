@@ -7,6 +7,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from app.models.document import Document, DocumentChunk, DocumentStatus
 from app.models.meeting import MeetingRecording, MeetingTranscript
 from app.models.wiki import WikiPage
+from app.services.wiki_service import extract_indexable_wiki_text
 from app.services.vector_service import embed_query, get_tenant_store
 
 
@@ -32,6 +33,10 @@ def _clean_snippet(text: str, max_len: int = 240) -> str:
     if len(compact) <= max_len:
         return compact
     return compact[: max_len - 1].rstrip() + "…"
+
+
+def _wiki_text(page: WikiPage) -> str:
+    return extract_indexable_wiki_text(page.markdown_content or "")
 
 
 async def search_all(
@@ -158,9 +163,7 @@ async def search_all(
                     "source_type": "wiki_page",
                     "source_id": uuid.UUID(page_id),
                     "title": str(metadata.get("title") or page.title),
-                    "snippet": _clean_snippet(
-                        str(metadata.get("content") or page.markdown_content)
-                    ),
+                    "snippet": _clean_snippet(str(metadata.get("content") or _wiki_text(page))),
                     "score": vr["score"] * 0.7,
                 }
             )
@@ -181,6 +184,7 @@ async def search_all(
         .limit(20)
     )
     for page in page_rows.scalars().all():
+        wiki_text = _wiki_text(page)
         key = f"wiki_page:{page.id}"
         if key in seen:
             continue
@@ -190,9 +194,9 @@ async def search_all(
                 "source_type": "wiki_page",
                 "source_id": page.id,
                 "title": page.title,
-                "snippet": _clean_snippet(page.markdown_content),
+                "snippet": _clean_snippet(wiki_text),
                 "score": _match_score(
-                    f"{page.title}\n{page.markdown_content[:2000]}",
+                    f"{page.title}\n{wiki_text[:2000]}",
                     terms,
                     0.32,
                 ),

@@ -9,7 +9,10 @@ from app.config import settings
 from app.core.language import normalize_language
 from app.models.document import Document, DocumentChunk, DocumentStatus
 from app.models.wiki import WikiPage
-from app.services.wiki_service import suggest_wiki_placement
+from app.services.wiki_service import (
+    extract_indexable_wiki_text,
+    suggest_wiki_placement,
+)
 from app.services.vector_service import embed_texts, get_tenant_store, reset_tenant_store
 from app.services.wiki_workflow import get_workflow, set_workflow
 from app.workers.celery_app import celery_app
@@ -125,7 +128,7 @@ async def _reindex_wiki_vectors(tenant_id: str):
 
         wiki_chunks: list[tuple[str, str, dict]] = []
         for page in pages:
-            content = (page.markdown_content or "").strip()
+            content = extract_indexable_wiki_text(page.markdown_content or "")
             if not content:
                 continue
 

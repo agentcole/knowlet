@@ -7,7 +7,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.core.exceptions import BadRequestError, NotFoundError
 from app.models.document import DocumentChunk
-from app.models.wiki import WikiCategory, WikiPage, WikiPageRevision
+from app.models.wiki import WikiAsset, WikiCategory, WikiPage, WikiPageRevision
 from app.services.llm_service import (
     WIKI_ORGANIZE_PROMPT,
     WIKI_PLACEMENT_PROMPT,
@@ -36,6 +36,25 @@ def _derive_page_title(filename: str) -> str:
     if not base:
         return "Imported Content"
     return " ".join(part.capitalize() for part in re.split(r"[_\-]+", base))
+
+
+def asset_content_url(asset_id: uuid.UUID) -> str:
+    return f"/api/v1/wiki/assets/{asset_id}/content"
+
+
+def extract_indexable_wiki_text(markdown_content: str) -> str:
+    text = markdown_content or ""
+    text = re.sub(
+        r"```mermaid\s+.*?```",
+        " ",
+        text,
+        flags=re.IGNORECASE | re.DOTALL,
+    )
+    text = re.sub(r"!\[([^\]]*)\]\([^)]+\)", r" \1 ", text)
+    text = re.sub(r"\[([^\]]+)\]\([^)]+\)", r" \1 ", text)
+    text = re.sub(r"`{1,3}", " ", text)
+    text = re.sub(r"(^|\n)#+\s*", r"\1", text)
+    return re.sub(r"\s+", " ", text).strip()
 
 
 async def _get_or_create_category(
@@ -154,6 +173,23 @@ async def _remove_document_vectors(
     except Exception:
         # Keep DB state untouched if vector store cleanup fails unexpectedly.
         pass
+
+
+async def _asset_is_referenced(
+    db: AsyncSession,
+    tenant_id: uuid.UUID,
+    asset_id: uuid.UUID,
+) -> bool:
+    reference = asset_content_url(asset_id)
+    result = await db.execute(
+        select(WikiPage.id)
+        .where(
+            WikiPage.tenant_id == tenant_id,
+            WikiPage.markdown_content.ilike(f"%{reference}%"),
+        )
+        .limit(1)
+    )
+    return result.scalar_one_or_none() is not None
 
 
 async def _next_category_sort_order(
@@ -531,6 +567,88 @@ async def search_wiki(db: AsyncSession, tenant_id: uuid.UUID, query: str) -> lis
         )
     )
     return list(result.scalars().all())
+
+
+async def list_assets(
+    db: AsyncSession,
+    tenant_id: uuid.UUID,
+    query: str | None = None,
+    page: int = 1,
+    page_size: int = 24,
+) -> tuple[list[WikiAsset], int]:
+    filters = [WikiAsset.tenant_id == tenant_id]
+    if query:
+        filters.append(WikiAsset.filename.ilike(f"%{query}%"))
+
+    result = await db.execute(
+        select(WikiAsset)
+        .where(*filters)
+        .order_by(desc(WikiAsset.created_at))
+        .offset((page - 1) * page_size)
+        .limit(page_size)
+    )
+    items = list(result.scalars().all())
+
+    count_result = await db.execute(
+        select(func.count())
+        .select_from(WikiAsset)
+        .where(*filters)
+    )
+    total = count_result.scalar_one() or 0
+    return items, total
+
+
+async def get_asset(
+    db: AsyncSession,
+    tenant_id: uuid.UUID,
+    asset_id: uuid.UUID,
+) -> WikiAsset:
+    result = await db.execute(
+        select(WikiAsset).where(
+            WikiAsset.id == asset_id,
+            WikiAsset.tenant_id == tenant_id,
+        )
+    )
+    asset = result.scalar_one_or_none()
+    if asset is None:
+        raise NotFoundError("Wiki asset not found")
+    return asset
+
+
+async def create_asset(
+    db: AsyncSession,
+    tenant_id: uuid.UUID,
+    uploaded_by: uuid.UUID,
+    filename: str,
+    content_type: str,
+    data: bytes,
+) -> WikiAsset:
+    safe_filename = filename.strip() or "asset"
+    storage_path = await storage.save(tenant_id, "wiki-assets", safe_filename, data)
+    asset = WikiAsset(
+        tenant_id=tenant_id,
+        uploaded_by=uploaded_by,
+        filename=safe_filename,
+        content_type=content_type or "application/octet-stream",
+        storage_path=storage_path,
+        file_size=len(data),
+    )
+    db.add(asset)
+    await db.flush()
+    return asset
+
+
+async def delete_asset(
+    db: AsyncSession,
+    tenant_id: uuid.UUID,
+    asset_id: uuid.UUID,
+) -> None:
+    asset = await get_asset(db, tenant_id, asset_id)
+    if await _asset_is_referenced(db, tenant_id, asset_id):
+        raise BadRequestError("Asset is still referenced by wiki pages")
+    await storage.delete(asset.storage_path)
+    await db.delete(asset)
+    await db.flush()
 
 
 async def list_page_revisions(

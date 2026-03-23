@@ -58,3 +58,15 @@ class WikiPageRevision(UUIDMixin, TimestampMixin, TenantMixin, Base):
     created_by: Mapped[uuid.UUID | None] = mapped_column(UUID(as_uuid=True), nullable=True)
 
     page = relationship("WikiPage", back_populates="revisions")
+
+
+class WikiAsset(UUIDMixin, TimestampMixin, TenantMixin, Base):
+    __tablename__ = "wiki_assets"
+
+    uploaded_by: Mapped[uuid.UUID] = mapped_column(
+        UUID(as_uuid=True), ForeignKey("users.id"), nullable=False
+    )
+    filename: Mapped[str] = mapped_column(String(500), nullable=False)
+    content_type: Mapped[str] = mapped_column(String(255), nullable=False)
+    storage_path: Mapped[str] = mapped_column(Text, nullable=False)
+    file_size: Mapped[int] = mapped_column(Integer, nullable=False, default=0)

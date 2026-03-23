@@ -54,6 +54,22 @@ class WikiPageResponse(BaseModel):
     model_config = {"from_attributes": True}
 
 
+class WikiAssetResponse(BaseModel):
+    id: uuid.UUID
+    filename: str
+    content_type: str
+    file_size: int
+    created_at: datetime
+    content_url: str
+
+
+class WikiAssetListResponse(BaseModel):
+    items: list[WikiAssetResponse]
+    total: int
+    page: int
+    page_size: int
+
+
 class WikiPageRevisionResponse(BaseModel):
     id: uuid.UUID
     page_id: uuid.UUID

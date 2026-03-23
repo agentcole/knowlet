@@ -1,5 +1,4 @@
-import { useEffect, useMemo, useState, type DragEvent } from "react";
-import ReactMarkdown from "react-markdown";
+import { useEffect, useMemo, useRef, useState, type DragEvent } from "react";
 import { useSearchParams } from "react-router-dom";
 import {
   useWikiTree,
@@ -20,6 +19,8 @@ import { wikiApi } from "@/api/wiki";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Card } from "@/components/ui/card";
+import { WikiAssetLibrary } from "@/components/wiki/WikiAssetLibrary";
+import { WikiMarkdown } from "@/components/wiki/WikiMarkdown";
 import {
   BookOpen,
   FolderOpen,
@@ -35,6 +36,8 @@ import {
   ArrowDown,
   ArrowUp,
   RefreshCw,
+  Braces,
+  ImagePlus,
 } from "lucide-react";
 import { useAuthStore } from "@/store/auth";
 import type { WikiCategory } from "@/types";
@@ -371,6 +374,7 @@ export function WikiPage_() {
   const [editContent, setEditContent] = useState("");
   const [changeNote, setChangeNote] = useState("");
   const [showHistory, setShowHistory] = useState(false);
+  const [showAssetLibrary, setShowAssetLibrary] = useState(false);
   const [dragPayload, setDragPayload] = useState<DragPayload | null>(null);
   const [activeDropTarget, setActiveDropTarget] = useState<string | null>(null);
   const [dragError, setDragError] = useState("");
@@ -385,6 +389,7 @@ export function WikiPage_() {
   const [folderSortOrder, setFolderSortOrder] = useState("0");
   const [folderError, setFolderError] = useState("");
   const [reindexStatus, setReindexStatus] = useState("");
+  const editorRef = useRef<HTMLTextAreaElement | null>(null);
 
   const { data: page } = useWikiPage(selectedPageId || "");
   const { data: revisions } = useWikiRevisions(selectedPageId || "");
@@ -447,6 +452,40 @@ export function WikiPage_() {
     });
     setIsEditing(false);
     setChangeNote("");
+  };
+
+  const insertAtCursor = (snippet: string) => {
+    setEditContent((current) => {
+      const textarea = editorRef.current;
+      if (!textarea) {
+        return current ? `${current}\n\n${snippet}` : snippet;
+      }
+
+      const start = textarea.selectionStart ?? current.length;
+      const end = textarea.selectionEnd ?? start;
+      const prefix = current.slice(0, start);
+      const suffix = current.slice(end);
+      const next = `${prefix}${snippet}${suffix}`;
+
+      window.requestAnimationFrame(() => {
+        const position = start + snippet.length;
+        textarea.focus();
+        textarea.setSelectionRange(position, position);
+      });
+
+      return next;
+    });
+  };
+
+  const handleInsertMermaid = () => {
+    const snippet = [
+      "```mermaid",
+      "graph TD",
+      "  A[Start] --> B[Next step]",
+      "```",
+      "",
+    ].join("\n");
+    insertAtCursor(snippet);
   };
 
   const handleCreatePage = () => {
@@ -1048,16 +1087,33 @@ export function WikiPage_() {
                   value={changeNote}
                   onChange={(e) => setChangeNote(e.target.value)}
                 />
+                <div className="mb-3 flex flex-wrap gap-2">
+                  <Button
+                    size="sm"
+                    type="button"
+                    variant="outline"
+                    onClick={() => setShowAssetLibrary(true)}
+                  >
+                    <ImagePlus size={14} /> Media
+                  </Button>
+                  <Button
+                    size="sm"
+                    type="button"
+                    variant="outline"
+                    onClick={handleInsertMermaid}
+                  >
+                    <Braces size={14} /> Mermaid
+                  </Button>
+                </div>
                 <textarea
+                  ref={editorRef}
                   className="h-[calc(100vh-300px)] w-full resize-none rounded-md border border-border p-4 font-mono text-sm focus:outline-none focus:ring-2 focus:ring-primary"
                   value={editContent}
                   onChange={(e) => setEditContent(e.target.value)}
                 />
               </div>
             ) : (
-              <div className="prose prose-sm max-w-none">
-                <ReactMarkdown>{page.markdown_content}</ReactMarkdown>
-              </div>
+              <WikiMarkdown content={page.markdown_content} />
             )}
           </div>
         ) : (
@@ -1069,6 +1125,14 @@ export function WikiPage_() {
           </div>
         )}
       </div>
+
+      {showAssetLibrary && (
+        <WikiAssetLibrary
+          canDelete={canManageStructure}
+          onClose={() => setShowAssetLibrary(false)}
+          onInsert={(markdown) => insertAtCursor(markdown)}
+        />
+      )}
 
       {editingCategoryId && editingCategory && (
         <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/40 p-4">

@@ -1,8 +1,28 @@
 import api from "./client";
-import type { WikiCategory, WikiPage, WikiPageRevision, WikiTree } from "@/types";
+import type {
+  PaginatedResponse,
+  WikiAsset,
+  WikiCategory,
+  WikiPage,
+  WikiPageRevision,
+  WikiTree,
+} from "@/types";
 
 export const wikiApi = {
   getTree: () => api.get<WikiTree>("/wiki/tree"),
+
+  listAssets: (params?: { q?: string; page?: number; page_size?: number }) =>
+    api.get<PaginatedResponse<WikiAsset>>("/wiki/assets", { params }),
+
+  uploadAsset: (file: File) => {
+    const formData = new FormData();
+    formData.append("file", file);
+    return api.post<WikiAsset>("/wiki/assets/upload", formData, {
+      headers: { "Content-Type": "multipart/form-data" },
+    });
+  },
+
+  deleteAsset: (id: string) => api.delete(`/wiki/assets/${id}`),
 
   createCategory: (data: { name: string; parent_id?: string; sort_order?: number }) =>
     api.post<WikiCategory>("/wiki/categories", data),

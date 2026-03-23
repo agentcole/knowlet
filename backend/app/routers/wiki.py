@@ -1,6 +1,8 @@
+import os
 import uuid
 
-from fastapi import APIRouter, Depends, Query
+from fastapi import APIRouter, Depends, File, Query, UploadFile
+from fastapi.responses import FileResponse
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.database import get_db
@@ -12,6 +14,8 @@ from app.schemas.wiki import (
     WikiCategoryCreate,
     WikiCategoryResponse,
     WikiCategoryUpdate,
+    WikiAssetListResponse,
+    WikiAssetResponse,
     WikiPageCreate,
     WikiPageRevisionResponse,
     WikiPageResponse,
@@ -23,6 +27,17 @@ from app.services import wiki_service
 router = APIRouter(prefix="/api/v1/wiki", tags=["wiki"])
 
 
+def _asset_response(asset) -> WikiAssetResponse:
+    return WikiAssetResponse(
+        id=asset.id,
+        filename=asset.filename,
+        content_type=asset.content_type,
+        file_size=asset.file_size,
+        created_at=asset.created_at,
+        content_url=wiki_service.asset_content_url(asset.id),
+    )
+
+
 @router.get("/tree", response_model=WikiTreeResponse)
 async def get_wiki_tree(
     tenant_id: uuid.UUID = Depends(get_tenant_id),
@@ -30,6 +45,68 @@ async def get_wiki_tree(
 ):
     tree = await wiki_service.get_wiki_tree(db, tenant_id)
     return WikiTreeResponse(**tree)
+
+
+@router.get("/assets", response_model=WikiAssetListResponse)
+async def list_assets(
+    q: str | None = Query(None, min_length=1),
+    page: int = Query(1, ge=1),
+    page_size: int = Query(24, ge=1, le=100),
+    tenant_id: uuid.UUID = Depends(get_tenant_id),
+    db: AsyncSession = Depends(get_db),
+):
+    items, total = await wiki_service.list_assets(db, tenant_id, q, page, page_size)
+    return WikiAssetListResponse(
+        items=[_asset_response(asset) for asset in items],
+        total=total,
+        page=page,
+        page_size=page_size,
+    )
+
+
+@router.post("/assets/upload", response_model=WikiAssetResponse)
+async def upload_asset(
+    file: UploadFile = File(...),
+    current_user: User = Depends(get_current_user),
+    tenant_id: uuid.UUID = Depends(get_tenant_id),
+    db: AsyncSession = Depends(get_db),
+):
+    data = await file.read()
+    asset = await wiki_service.create_asset(
+        db=db,
+        tenant_id=tenant_id,
+        uploaded_by=current_user.id,
+        filename=file.filename or "asset",
+        content_type=file.content_type or "application/octet-stream",
+        data=data,
+    )
+    return _asset_response(asset)
+
+
+@router.get("/assets/{asset_id}/content")
+async def get_asset_content(
+    asset_id: uuid.UUID,
+    tenant_id: uuid.UUID = Depends(get_tenant_id),
+    db: AsyncSession = Depends(get_db),
+):
+    asset = await wiki_service.get_asset(db, tenant_id, asset_id)
+    return FileResponse(
+        path=asset.storage_path,
+        media_type=asset.content_type,
+        filename=os.path.basename(asset.filename),
+    )
+
+
+@router.delete("/assets/{asset_id}", status_code=204)
+async def delete_asset(
+    asset_id: uuid.UUID,
+    membership: TenantMembership = Depends(get_tenant_membership),
+    tenant_id: uuid.UUID = Depends(get_tenant_id),
+    db: AsyncSession = Depends(get_db),
+):
+    if membership.role not in (TenantRole.OWNER, TenantRole.ADMIN):
+        raise ForbiddenError("Only admins can delete wiki assets")
+    await wiki_service.delete_asset(db, tenant_id, asset_id)
 
 
 @router.post("/categories", response_model=WikiCategoryResponse)

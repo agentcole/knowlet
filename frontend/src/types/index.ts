@@ -91,6 +91,15 @@ export interface WikiPage {
   source_meetings: string[] | null;
 }
 
+export interface WikiAsset {
+  id: string;
+  filename: string;
+  content_type: string;
+  file_size: number;
+  created_at: string;
+  content_url: string;
+}
+
 export interface WikiPageRevision {
   id: string;
   page_id: string;

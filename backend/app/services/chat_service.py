@@ -10,6 +10,7 @@ from app.models.chat import ChatMessage, ChatSession, MessageRole
 from app.models.document import Document, DocumentChunk, DocumentStatus
 from app.models.wiki import WikiPage
 from app.services.llm_service import CHAT_SYSTEM_PROMPT, stream_text, with_output_language
+from app.services.wiki_service import extract_indexable_wiki_text
 from app.services.vector_service import embed_query, get_tenant_store
 
 
@@ -77,6 +78,10 @@ def _clean_source_snippet(text: str, max_len: int = 260) -> str:
     if len(compact) <= max_len:
         return compact
     return compact[: max_len - 1].rstrip() + "…"
+
+
+def _wiki_text(page: WikiPage) -> str:
+    return extract_indexable_wiki_text(page.markdown_content or "")
 
 
 def _prepare_source_references(sources: list[dict]) -> list[dict]:
@@ -279,12 +284,13 @@ async def _get_context(
                     "source_type": "wiki_page",
                     "wiki_page_id": page_id,
                     "title": str(metadata.get("title") or page.title),
-                    "snippet": str(metadata.get("content") or page.markdown_content[:500]),
+                    "snippet": str(metadata.get("content") or _wiki_text(page)[:500]),
                     "score": vr["score"] * 0.7,
                 }
             )
 
     for page in keyword_pages:
+        wiki_text = _wiki_text(page)
         page_key = f"wiki:{page.id}"
         if page_key in seen_ids:
             continue
@@ -293,9 +299,9 @@ async def _get_context(
             "source_type": "wiki_page",
             "wiki_page_id": str(page.id),
             "title": page.title,
-            "snippet": page.markdown_content[:500],
+            "snippet": wiki_text[:500],
             "score": _match_score(
-                f"{page.title}\n{page.markdown_content[:2000]}",
+                f"{page.title}\n{wiki_text[:2000]}",
                 terms,
                 0.3,
             ),
@@ -366,8 +372,15 @@ async def _get_context(
             context_parts.append(f"### {s.get('title', 'Source')}\n{s['snippet']}")
 
     # Also fetch full wiki page content for keyword results
+    included_page_ids = {
+        str(source.get("wiki_page_id"))
+        for source in top_sources
+        if source.get("source_type") == "wiki_page" and source.get("wiki_page_id")
+    }
     for page in keyword_pages[:3]:
-        context_parts.append(f"### {page.title}\n{page.markdown_content[:2000]}")
+        if str(page.id) in included_page_ids:
+            continue
+        context_parts.append(f"### {page.title}\n{_wiki_text(page)[:2000]}")
 
     context = "\n\n---\n\n".join(context_parts) if context_parts else "No relevant context found."
     return context, _prepare_source_references(top_sources)
