@@ -7,6 +7,7 @@ class MeetingUploadResponse(BaseModel):
     id: uuid.UUID
     title: str
     status: str
+    language: str
 
 
 class MeetingResponse(BaseModel):
@@ -15,6 +16,7 @@ class MeetingResponse(BaseModel):
     duration_seconds: float | None
     status: str
     meeting_date: datetime | None
+    language: str
     participants: list | None
     created_at: datetime
 

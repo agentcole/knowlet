@@ -122,6 +122,7 @@ export interface Meeting {
   duration_seconds: number | null;
   status: string;
   meeting_date: string | null;
+  language: string;
   participants: string[] | null;
   created_at: string;
 }

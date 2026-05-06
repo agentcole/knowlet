@@ -9,9 +9,14 @@ from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession, async_sessionmaker, create_async_engine
 
 from app.config import settings
+from app.core.language import normalize_language
 from app.models.meeting import MeetingRecording, MeetingStatus
 from app.services.meeting_service import save_transcript
-from app.services.llm_service import MEETING_SUMMARY_PROMPT, generate_text
+from app.services.llm_service import (
+    MEETING_SUMMARY_PROMPT,
+    generate_text,
+    with_output_language,
+)
 from app.workers.celery_app import celery_app
 
 logger = logging.getLogger(__name__)
@@ -54,6 +59,23 @@ def _parse_summary_payload(raw_text: str) -> dict:
     raise ValueError("Could not parse meeting summary JSON")
 
 
+def _build_deepgram_options(language_code: str):
+    from deepgram import PrerecordedOptions
+
+    option_kwargs = {
+        "model": "nova-3",
+        "smart_format": True,
+        "diarize": True,
+        "punctuate": True,
+        "language": language_code,
+    }
+    try:
+        return PrerecordedOptions(**option_kwargs)
+    except TypeError:
+        option_kwargs.pop("language", None)
+        return PrerecordedOptions(**option_kwargs)
+
+
 async def _process_meeting(meeting_id: str, tenant_id: str):
     session_factory = _get_session_factory()
     tid = uuid.UUID(tenant_id)
@@ -66,6 +88,8 @@ async def _process_meeting(meeting_id: str, tenant_id: str):
         if not meeting:
             return
 
+        language_code = normalize_language(meeting.language)
+        meeting.language = language_code
         meeting.status = MeetingStatus.TRANSCRIBING
         await db.commit()
 
@@ -79,15 +103,10 @@ async def _process_meeting(meeting_id: str, tenant_id: str):
             segments = []
 
             try:
-                from deepgram import DeepgramClient, PrerecordedOptions
+                from deepgram import DeepgramClient
 
                 dg = DeepgramClient(settings.DEEPGRAM_API_KEY)
-                options = PrerecordedOptions(
-                    model="nova-3",
-                    smart_format=True,
-                    diarize=True,
-                    punctuate=True,
-                )
+                options = _build_deepgram_options(language_code)
 
                 source = {
                     "buffer": audio_data,
@@ -149,7 +168,7 @@ async def _process_meeting(meeting_id: str, tenant_id: str):
 
             try:
                 llm_result = await generate_text(
-                    MEETING_SUMMARY_PROMPT,
+                    with_output_language(MEETING_SUMMARY_PROMPT, language_code),
                     f"Transcript:\n\n{full_text[:15000]}",
                 )
                 data = _parse_summary_payload(llm_result)

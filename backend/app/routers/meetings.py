@@ -23,6 +23,7 @@ async def upload_meeting(
     file: UploadFile = File(...),
     title: str = Form(...),
     meeting_date: str | None = Form(None),
+    language: str | None = Form(None),
     current_user: User = Depends(get_current_user),
     tenant_id: uuid.UUID = Depends(get_tenant_id),
     db: AsyncSession = Depends(get_db),
@@ -31,8 +32,14 @@ async def upload_meeting(
     parsed_date = datetime.fromisoformat(meeting_date) if meeting_date else None
 
     meeting = await meeting_service.upload_meeting(
-        db, tenant_id, current_user.id, title, file_data,
-        file.filename or "recording", parsed_date
+        db,
+        tenant_id,
+        current_user.id,
+        title,
+        file_data,
+        file.filename or "recording",
+        parsed_date,
+        language or current_user.default_language,
     )
 
     try:
@@ -41,7 +48,12 @@ async def upload_meeting(
     except Exception:
         pass
 
-    return MeetingUploadResponse(id=meeting.id, title=meeting.title, status=meeting.status.value)
+    return MeetingUploadResponse(
+        id=meeting.id,
+        title=meeting.title,
+        status=meeting.status.value,
+        language=meeting.language,
+    )
 
 
 @router.get("/", response_model=MeetingListResponse)

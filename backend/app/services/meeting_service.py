@@ -6,6 +6,7 @@ from sqlalchemy import func, select
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.core.exceptions import NotFoundError
+from app.core.language import normalize_language
 from app.models.meeting import MeetingRecording, MeetingStatus, MeetingTranscript
 from app.services.storage_service import storage
 
@@ -18,6 +19,7 @@ async def upload_meeting(
     file_data: bytes,
     filename: str,
     meeting_date: datetime | None = None,
+    language: str | None = None,
 ) -> MeetingRecording:
     storage_path = await storage.save(tenant_id, "meetings", filename, file_data)
 
@@ -28,6 +30,7 @@ async def upload_meeting(
         storage_path=storage_path,
         status=MeetingStatus.UPLOADED,
         meeting_date=meeting_date,
+        language=normalize_language(language),
     )
     db.add(meeting)
     await db.flush()

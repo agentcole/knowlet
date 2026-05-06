@@ -2,10 +2,11 @@ import api from "./client";
 import type { Meeting, Transcript, PaginatedResponse } from "@/types";
 
 export const meetingsApi = {
-  upload: (file: File, title: string, meetingDate?: string) => {
+  upload: (file: File, title: string, language: string, meetingDate?: string) => {
     const formData = new FormData();
     formData.append("file", file);
     formData.append("title", title);
+    formData.append("language", language);
     if (meetingDate) formData.append("meeting_date", meetingDate);
     return api.post("/meetings/upload", formData, {
       headers: { "Content-Type": "multipart/form-data" },

@@ -3,19 +3,27 @@ import { useQuery } from "@tanstack/react-query";
 import { useDropzone } from "react-dropzone";
 import { useSearchParams } from "react-router-dom";
 import { meetingsApi } from "@/api/meetings";
-import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
 import { Card } from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
-import { Mic, Upload, Clock, Users } from "lucide-react";
+import { DEFAULT_LANGUAGE, SUPPORTED_LANGUAGES } from "@/constants/languages";
+import { useAuthStore } from "@/store/auth";
+import { Mic, Upload, Clock } from "lucide-react";
 import type { Meeting, Transcript } from "@/types";
+
+function languageLabel(code: string): string {
+  return SUPPORTED_LANGUAGES.find((language) => language.code === code)?.label || code;
+}
 
 export function MeetingsPage() {
   const [searchParams] = useSearchParams();
+  const { user } = useAuthStore();
+  const defaultLanguage = user?.default_language || DEFAULT_LANGUAGE;
   const [page, setPage] = useState(1);
   const [selectedId, setSelectedId] = useState<string | null>(null);
   const [appliedMeetingParam, setAppliedMeetingParam] = useState<string | null>(null);
   const [uploadTitle, setUploadTitle] = useState("");
+  const [uploadLanguage, setUploadLanguage] = useState(defaultLanguage);
 
   const { data, isLoading, refetch } = useQuery({
     queryKey: ["meetings", page],
@@ -36,16 +44,21 @@ export function MeetingsPage() {
     setAppliedMeetingParam(meetingId);
   }, [searchParams, appliedMeetingParam]);
 
+  useEffect(() => {
+    setUploadLanguage(defaultLanguage);
+  }, [defaultLanguage]);
+
   const onDrop = useCallback(
     async (files: File[]) => {
       if (files[0]) {
         const title = uploadTitle || files[0].name.replace(/\.[^/.]+$/, "");
-        await meetingsApi.upload(files[0], title);
+        await meetingsApi.upload(files[0], title, uploadLanguage);
         setUploadTitle("");
+        setUploadLanguage(defaultLanguage);
         refetch();
       }
     },
-    [uploadTitle, refetch]
+    [defaultLanguage, uploadLanguage, uploadTitle, refetch]
   );
 
   const { getRootProps, getInputProps, isDragActive } = useDropzone({
@@ -73,6 +86,18 @@ export function MeetingsPage() {
           onChange={(e) => setUploadTitle(e.target.value)}
           className="mb-2"
         />
+
+        <select
+          className="mb-2 h-10 w-full rounded-md border border-border bg-background px-3 text-sm"
+          value={uploadLanguage}
+          onChange={(e) => setUploadLanguage(e.target.value)}
+        >
+          {SUPPORTED_LANGUAGES.map((language) => (
+            <option key={language.code} value={language.code}>
+              {language.label}
+            </option>
+          ))}
+        </select>
 
         <div
           {...getRootProps()}
@@ -111,6 +136,7 @@ export function MeetingsPage() {
                   >
                     {meeting.status}
                   </Badge>
+                  <Badge variant="outline">{languageLabel(meeting.language)}</Badge>
                   <span className="text-xs text-muted-foreground flex items-center gap-1">
                     <Clock size={12} /> {formatDuration(meeting.duration_seconds)}
                   </span>
