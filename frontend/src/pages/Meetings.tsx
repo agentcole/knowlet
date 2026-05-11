@@ -3,12 +3,13 @@ import { useQuery } from "@tanstack/react-query";
 import { useDropzone } from "react-dropzone";
 import { useSearchParams } from "react-router-dom";
 import { meetingsApi } from "@/api/meetings";
+import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
 import { Card } from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
 import { DEFAULT_LANGUAGE, SUPPORTED_LANGUAGES } from "@/constants/languages";
 import { useAuthStore } from "@/store/auth";
-import { Mic, Upload, Clock } from "lucide-react";
+import { Mic, Upload, Clock, Trash2 } from "lucide-react";
 import type { Meeting, Transcript } from "@/types";
 
 function languageLabel(code: string): string {
@@ -17,13 +18,20 @@ function languageLabel(code: string): string {
 
 export function MeetingsPage() {
   const [searchParams] = useSearchParams();
-  const { user } = useAuthStore();
+  const { user, memberships, currentTenantId } = useAuthStore();
   const defaultLanguage = user?.default_language || DEFAULT_LANGUAGE;
+  const currentMembership = memberships.find(
+    (membership) => membership.tenant_id === currentTenantId,
+  );
+  const canManageMeetings =
+    currentMembership?.role === "owner" || currentMembership?.role === "admin";
   const [page, setPage] = useState(1);
   const [selectedId, setSelectedId] = useState<string | null>(null);
   const [appliedMeetingParam, setAppliedMeetingParam] = useState<string | null>(null);
   const [uploadTitle, setUploadTitle] = useState("");
   const [uploadLanguage, setUploadLanguage] = useState(defaultLanguage);
+  const [deletingMeetingId, setDeletingMeetingId] = useState<string | null>(null);
+  const [meetingError, setMeetingError] = useState("");
 
   const { data, isLoading, refetch } = useQuery({
     queryKey: ["meetings", page],
@@ -74,6 +82,23 @@ export function MeetingsPage() {
     return `${m}:${s.toString().padStart(2, "0")}`;
   };
 
+  const handleDeleteMeeting = async (meeting: Meeting) => {
+    if (!confirm(`Delete "${meeting.title}"?`)) return;
+    setMeetingError("");
+    setDeletingMeetingId(meeting.id);
+    try {
+      await meetingsApi.delete(meeting.id);
+      if (selectedId === meeting.id) {
+        setSelectedId(null);
+      }
+      await refetch();
+    } catch (err: any) {
+      setMeetingError(err?.response?.data?.detail || "Failed to delete meeting.");
+    } finally {
+      setDeletingMeetingId(null);
+    }
+  };
+
   return (
     <div className="flex h-full">
       {/* List */}
@@ -112,6 +137,10 @@ export function MeetingsPage() {
           </p>
         </div>
 
+        {meetingError && (
+          <p className="mb-3 text-sm text-destructive">{meetingError}</p>
+        )}
+
         {isLoading ? (
           <p className="text-sm text-muted-foreground">Loading...</p>
         ) : !data?.items.length ? (
@@ -129,7 +158,25 @@ export function MeetingsPage() {
                 }`}
                 onClick={() => setSelectedId(meeting.id)}
               >
-                <p className="text-sm font-medium">{meeting.title}</p>
+                <div className="flex items-start justify-between gap-2">
+                  <p className="min-w-0 flex-1 text-sm font-medium">{meeting.title}</p>
+                  {(canManageMeetings || meeting.uploaded_by === user?.id) && (
+                    <Button
+                      className="h-8 w-8 shrink-0 text-muted-foreground hover:text-destructive"
+                      disabled={deletingMeetingId === meeting.id}
+                      onClick={(event) => {
+                        event.stopPropagation();
+                        void handleDeleteMeeting(meeting);
+                      }}
+                      size="icon"
+                      title="Delete meeting"
+                      type="button"
+                      variant="ghost"
+                    >
+                      <Trash2 size={14} />
+                    </Button>
+                  )}
+                </div>
                 <div className="flex items-center gap-3 mt-1">
                   <Badge
                     variant={meeting.status === "processed" ? "success" : meeting.status === "failed" ? "destructive" : "warning"}

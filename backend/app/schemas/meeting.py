@@ -12,6 +12,7 @@ class MeetingUploadResponse(BaseModel):
 
 class MeetingResponse(BaseModel):
     id: uuid.UUID
+    uploaded_by: uuid.UUID
     title: str
     duration_seconds: float | None
     status: str

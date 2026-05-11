@@ -20,6 +20,8 @@ export const meetingsApi = {
 
   get: (id: string) => api.get<Meeting>(`/meetings/${id}`),
 
+  delete: (id: string) => api.delete(`/meetings/${id}`),
+
   getTranscript: (id: string) =>
     api.get<Transcript>(`/meetings/${id}/transcript`),
 

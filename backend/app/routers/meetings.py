@@ -4,8 +4,10 @@ from datetime import datetime
 from fastapi import APIRouter, Depends, File, Form, Query, UploadFile
 from sqlalchemy.ext.asyncio import AsyncSession
 
+from app.core.exceptions import ForbiddenError
 from app.database import get_db
-from app.dependencies import get_current_user, get_tenant_id
+from app.dependencies import get_current_user, get_tenant_id, get_tenant_membership
+from app.models.tenant_membership import TenantMembership, TenantRole
 from app.models.user import User
 from app.schemas.meeting import (
     MeetingListResponse,
@@ -80,6 +82,24 @@ async def get_meeting(
 ):
     meeting = await meeting_service.get_meeting(db, tenant_id, meeting_id)
     return MeetingResponse.model_validate(meeting)
+
+
+@router.delete("/{meeting_id}", status_code=204)
+async def delete_meeting(
+    meeting_id: uuid.UUID,
+    current_user: User = Depends(get_current_user),
+    membership: TenantMembership = Depends(get_tenant_membership),
+    tenant_id: uuid.UUID = Depends(get_tenant_id),
+    db: AsyncSession = Depends(get_db),
+):
+    meeting = await meeting_service.get_meeting(db, tenant_id, meeting_id)
+    can_delete = (
+        meeting.uploaded_by == current_user.id
+        or membership.role in (TenantRole.OWNER, TenantRole.ADMIN)
+    )
+    if not can_delete:
+        raise ForbiddenError("Only the uploader or tenant admins can delete meetings")
+    await meeting_service.delete_meeting(db, tenant_id, meeting_id)
 
 
 @router.get("/{meeting_id}/transcript", response_model=TranscriptResponse)

@@ -5,9 +5,10 @@ from datetime import datetime
 from sqlalchemy import func, select
 from sqlalchemy.ext.asyncio import AsyncSession
 
-from app.core.exceptions import NotFoundError
+from app.core.exceptions import BadRequestError, NotFoundError
 from app.core.language import normalize_language
 from app.models.meeting import MeetingRecording, MeetingStatus, MeetingTranscript
+from app.models.wiki import WikiPage
 from app.services.storage_service import storage
 
 
@@ -50,6 +51,33 @@ async def get_meeting(
     if not meeting:
         raise NotFoundError("Meeting not found")
     return meeting
+
+
+async def delete_meeting(
+    db: AsyncSession,
+    tenant_id: uuid.UUID,
+    meeting_id: uuid.UUID,
+) -> None:
+    meeting = await get_meeting(db, tenant_id, meeting_id)
+    if meeting.status in (MeetingStatus.TRANSCRIBING, MeetingStatus.SUMMARIZING):
+        raise BadRequestError("Cannot delete a meeting while it is being processed")
+
+    await storage.delete(meeting.storage_path)
+
+    meeting_ref = str(meeting.id)
+    page_result = await db.execute(
+        select(WikiPage).where(
+            WikiPage.tenant_id == tenant_id,
+            WikiPage.source_meetings.contains([meeting_ref]),
+        )
+    )
+    for page in page_result.scalars().all():
+        page.source_meetings = [
+            ref for ref in (page.source_meetings or []) if ref != meeting_ref
+        ]
+
+    await db.delete(meeting)
+    await db.flush()
 
 
 async def list_meetings(

@@ -118,6 +118,7 @@ export interface WikiTree {
 
 export interface Meeting {
   id: string;
+  uploaded_by: string;
   title: string;
   duration_seconds: number | null;
   status: string;

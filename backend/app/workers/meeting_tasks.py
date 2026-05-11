@@ -76,6 +76,11 @@ def _build_deepgram_options(language_code: str):
         return PrerecordedOptions(**option_kwargs)
 
 
+def _meeting_date_label(meeting: MeetingRecording) -> str:
+    date_value = meeting.meeting_date or meeting.created_at
+    return date_value.date().isoformat()
+
+
 async def _process_meeting(meeting_id: str, tenant_id: str):
     session_factory = _get_session_factory()
     tid = uuid.UUID(tenant_id)
@@ -194,7 +199,8 @@ async def _process_meeting(meeting_id: str, tenant_id: str):
             try:
                 from app.services.wiki_service import create_page
 
-                page_content = f"""# Meeting: {meeting.title}
+                meeting_title = f"Meeting {_meeting_date_label(meeting)}: {meeting.title}"
+                page_content = f"""# {meeting_title}
 
 **Date:** {meeting.meeting_date or meeting.created_at}
 **Participants:** {', '.join(meeting.participants or ['Unknown'])}
@@ -213,7 +219,7 @@ async def _process_meeting(meeting_id: str, tenant_id: str):
 
                 page_content += f"\n## Transcript\n{full_text}"
 
-                page = await create_page(db, tid, f"Meeting: {meeting.title}", page_content)
+                page = await create_page(db, tid, meeting_title, page_content)
                 page.source_meetings = [str(meeting.id)]
                 await db.commit()
             except Exception as exc:
