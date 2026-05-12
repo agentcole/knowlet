@@ -26,6 +26,11 @@ export const documentsApi = {
   getContent: (id: string) =>
     api.get<{ markdown_content: string }>(`/documents/${id}/content`),
 
+  download: (id: string) =>
+    api.get<Blob>(`/documents/${id}/download`, {
+      responseType: "blob",
+    }),
+
   getChunks: (id: string) =>
     api.get<DocumentChunk[]>(`/documents/${id}/chunks`),
 

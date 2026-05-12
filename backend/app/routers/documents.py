@@ -1,6 +1,8 @@
 import uuid
+import mimetypes
 
 from fastapi import APIRouter, Depends, File, Query, UploadFile
+from fastapi.responses import FileResponse
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.core.exceptions import ForbiddenError
@@ -91,6 +93,21 @@ async def get_document_content(
 ):
     doc = await document_service.get_document(db, tenant_id, document_id)
     return {"markdown_content": doc.markdown_content}
+
+
+@router.get("/{document_id}/download")
+async def download_document(
+    document_id: uuid.UUID,
+    tenant_id: uuid.UUID = Depends(get_tenant_id),
+    db: AsyncSession = Depends(get_db),
+):
+    doc = await document_service.get_document(db, tenant_id, document_id)
+    media_type, _ = mimetypes.guess_type(doc.filename)
+    return FileResponse(
+        path=doc.storage_path,
+        media_type=media_type or "application/octet-stream",
+        filename=doc.filename,
+    )
 
 
 @router.get("/{document_id}/chunks", response_model=list[DocumentChunkResponse])

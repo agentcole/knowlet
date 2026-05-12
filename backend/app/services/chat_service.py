@@ -24,13 +24,19 @@ async def create_session(
 
 
 async def get_session(
-    db: AsyncSession, tenant_id: uuid.UUID, session_id: uuid.UUID
+    db: AsyncSession,
+    tenant_id: uuid.UUID,
+    session_id: uuid.UUID,
+    user_id: uuid.UUID | None = None,
 ) -> ChatSession:
-    result = await db.execute(
+    query = (
         select(ChatSession)
         .options(selectinload(ChatSession.messages))
         .where(ChatSession.id == session_id, ChatSession.tenant_id == tenant_id)
     )
+    if user_id is not None:
+        query = query.where(ChatSession.user_id == user_id)
+    result = await db.execute(query)
     session = result.scalar_one_or_none()
     if not session:
         raise NotFoundError("Chat session not found")
@@ -49,9 +55,12 @@ async def list_sessions(
 
 
 async def delete_session(
-    db: AsyncSession, tenant_id: uuid.UUID, session_id: uuid.UUID
+    db: AsyncSession,
+    tenant_id: uuid.UUID,
+    session_id: uuid.UUID,
+    user_id: uuid.UUID,
 ) -> None:
-    session = await get_session(db, tenant_id, session_id)
+    session = await get_session(db, tenant_id, session_id, user_id)
     await db.delete(session)
     await db.flush()
 
@@ -390,11 +399,12 @@ async def send_message(
     db: AsyncSession,
     tenant_id: uuid.UUID,
     session_id: uuid.UUID,
+    user_id: uuid.UUID,
     content: str,
     language_code: str | None = None,
 ):
     """Send a message and stream the response."""
-    session = await get_session(db, tenant_id, session_id)
+    session = await get_session(db, tenant_id, session_id, user_id)
 
     # Save user message
     user_msg = ChatMessage(

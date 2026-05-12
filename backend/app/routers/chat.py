@@ -44,30 +44,43 @@ async def list_sessions(
 @router.get("/sessions/{session_id}", response_model=ChatSessionResponse)
 async def get_session(
     session_id: uuid.UUID,
+    current_user: User = Depends(get_current_user),
     tenant_id: uuid.UUID = Depends(get_tenant_id),
     db: AsyncSession = Depends(get_db),
 ):
-    session = await chat_service.get_session(db, tenant_id, session_id)
+    session = await chat_service.get_session(
+        db,
+        tenant_id,
+        session_id,
+        current_user.id,
+    )
     return ChatSessionResponse.model_validate(session)
 
 
 @router.get("/sessions/{session_id}/messages", response_model=list[ChatMessageResponse])
 async def get_messages(
     session_id: uuid.UUID,
+    current_user: User = Depends(get_current_user),
     tenant_id: uuid.UUID = Depends(get_tenant_id),
     db: AsyncSession = Depends(get_db),
 ):
-    session = await chat_service.get_session(db, tenant_id, session_id)
+    session = await chat_service.get_session(
+        db,
+        tenant_id,
+        session_id,
+        current_user.id,
+    )
     return [ChatMessageResponse.model_validate(m) for m in session.messages]
 
 
 @router.delete("/sessions/{session_id}", status_code=204)
 async def delete_session(
     session_id: uuid.UUID,
+    current_user: User = Depends(get_current_user),
     tenant_id: uuid.UUID = Depends(get_tenant_id),
     db: AsyncSession = Depends(get_db),
 ):
-    await chat_service.delete_session(db, tenant_id, session_id)
+    await chat_service.delete_session(db, tenant_id, session_id, current_user.id)
 
 
 @router.post("/sessions/{session_id}/messages")
@@ -88,6 +101,7 @@ async def send_message(
                     db,
                     tenant_id,
                     session_id,
+                    current_user.id,
                     body.content,
                     current_user.default_language,
                 ):

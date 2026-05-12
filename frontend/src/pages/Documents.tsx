@@ -5,7 +5,7 @@ import { useDocuments, useUploadDocument, useDeleteDocument } from "@/hooks/useD
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
 import { Card } from "@/components/ui/card";
-import { Upload, Trash2, RefreshCw, FileText } from "lucide-react";
+import { Upload, Trash2, RefreshCw, FileText, Download } from "lucide-react";
 import { documentsApi } from "@/api/documents";
 import { useAuthStore } from "@/store/auth";
 import type {
@@ -78,6 +78,8 @@ export function DocumentsPage() {
   });
   const [revisionNote, setRevisionNote] = useState("");
   const [approving, setApproving] = useState(false);
+  const [downloadingDocId, setDownloadingDocId] = useState<string | null>(null);
+  const [downloadError, setDownloadError] = useState("");
 
   const onDrop = useCallback(
     (files: File[]) => {
@@ -153,6 +155,26 @@ export function DocumentsPage() {
     }
   };
 
+  const downloadDocument = async (doc: Document) => {
+    setDownloadError("");
+    setDownloadingDocId(doc.id);
+    try {
+      const { data: blob } = await documentsApi.download(doc.id);
+      const objectUrl = URL.createObjectURL(blob);
+      const link = document.createElement("a");
+      link.href = objectUrl;
+      link.download = doc.filename;
+      document.body.appendChild(link);
+      link.click();
+      link.remove();
+      window.setTimeout(() => URL.revokeObjectURL(objectUrl), 60_000);
+    } catch (err: any) {
+      setDownloadError(err?.response?.data?.detail || "Failed to download document.");
+    } finally {
+      setDownloadingDocId(null);
+    }
+  };
+
   return (
     <div className="p-8">
       <div className="flex items-center justify-between mb-6">
@@ -179,6 +201,12 @@ export function DocumentsPage() {
         </p>
         {upload.isPending && <p className="text-sm text-primary mt-2">Uploading...</p>}
       </div>
+
+      {downloadError && (
+        <div className="mb-4 rounded-md border border-destructive/30 bg-destructive/10 px-3 py-2 text-sm text-destructive">
+          {downloadError}
+        </div>
+      )}
 
       {/* Document list */}
       {isLoading ? (
@@ -222,6 +250,15 @@ export function DocumentsPage() {
                     <RefreshCw size={16} />
                   </Button>
                 )}
+                <Button
+                  variant="ghost"
+                  size="icon"
+                  onClick={() => void downloadDocument(doc)}
+                  disabled={downloadingDocId === doc.id}
+                  title="Download original file"
+                >
+                  <Download size={16} />
+                </Button>
                 <Button
                   variant="ghost"
                   size="icon"

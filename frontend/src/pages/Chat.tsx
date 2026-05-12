@@ -46,6 +46,8 @@ export function ChatPage() {
   const [input, setInput] = useState("");
   const [pendingUserMessage, setPendingUserMessage] = useState<string | null>(null);
   const [expandedSourcesByMessage, setExpandedSourcesByMessage] = useState<Record<string, boolean>>({});
+  const [deletingSessionId, setDeletingSessionId] = useState<string | null>(null);
+  const [chatError, setChatError] = useState("");
   const messagesEndRef = useRef<HTMLDivElement>(null);
 
   useEffect(() => {
@@ -87,9 +89,18 @@ export function ChatPage() {
   };
 
   const handleDelete = async (id: string) => {
-    await chatApi.deleteSession(id);
-    if (selectedSessionId === id) setSelectedSessionId(null);
-    refetchSessions();
+    if (!confirm("Delete this chat?")) return;
+    setChatError("");
+    setDeletingSessionId(id);
+    try {
+      await chatApi.deleteSession(id);
+      if (selectedSessionId === id) setSelectedSessionId(null);
+      await refetchSessions();
+    } catch (err: any) {
+      setChatError(err?.response?.data?.detail || "Failed to delete chat.");
+    } finally {
+      setDeletingSessionId(null);
+    }
   };
 
   return (
@@ -111,6 +122,11 @@ export function ChatPage() {
             Failed to load chat sessions.
           </p>
         )}
+        {chatError && (
+          <p className="text-sm text-destructive text-center py-2">
+            {chatError}
+          </p>
+        )}
 
         <div className="space-y-1">
           {sessions?.map((session) => (
@@ -122,12 +138,24 @@ export function ChatPage() {
               onClick={() => setSelectedSessionId(session.id)}
             >
               <span className="truncate">{session.title}</span>
-              <button
-                onClick={(e) => { e.stopPropagation(); handleDelete(session.id); }}
-                className="opacity-0 group-hover:opacity-100 hover:text-destructive"
+              <Button
+                className={`h-7 w-7 shrink-0 ${
+                  selectedSessionId === session.id
+                    ? "text-primary-foreground hover:bg-primary-foreground/15 hover:text-primary-foreground"
+                    : "text-muted-foreground hover:text-destructive"
+                }`}
+                disabled={deletingSessionId === session.id}
+                onClick={(event) => {
+                  event.stopPropagation();
+                  void handleDelete(session.id);
+                }}
+                size="icon"
+                title="Delete chat"
+                type="button"
+                variant="ghost"
               >
                 <Trash2 size={14} />
-              </button>
+              </Button>
             </div>
           ))}
         </div>
